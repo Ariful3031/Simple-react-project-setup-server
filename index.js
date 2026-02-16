@@ -31,7 +31,7 @@ async function run() {
 
         const db = client.db("Simple-Project");
         const coursesCollection = db.collection("courses");
-        const userCollection =db.collection("users");
+        const userCollection = db.collection("users");
 
         // user related api 
         // User Related api
@@ -59,18 +59,18 @@ async function run() {
 
         app.patch('/users/:id/role',
             //  verifyFirebaseToken, verifyAdmin, 
-             async (req, res) => {
-            const id = req.params.id;
-            const roleInfo = req.body;
-            const query = { _id: new ObjectId(id) };
-            const updateDoc = {
-                $set: {
-                    role: roleInfo.role
+            async (req, res) => {
+                const id = req.params.id;
+                const roleInfo = req.body;
+                const query = { _id: new ObjectId(id) };
+                const updateDoc = {
+                    $set: {
+                        role: roleInfo.role
+                    }
                 }
-            }
-            const result = await userCollection.updateOne(query, updateDoc);
-            res.send(result);
-        })
+                const result = await userCollection.updateOne(query, updateDoc);
+                res.send(result);
+            })
 
         app.post('/users', async (req, res) => {
             const user = req.body;
@@ -89,8 +89,16 @@ async function run() {
 
         // courses api 
         app.get('/courses', async (req, res) => {
+            try {
+                // সব courses fetch করা
+                const courses = await coursesCollection.find({}).toArray();
+                res.status(200).send(courses);
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({ message: "Failed to fetch courses" });
+            }
+        });
 
-        })
 
         // app.post('/courses', async (req, res) => {
         //     const course = req.body;
