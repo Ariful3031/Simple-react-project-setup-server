@@ -9,6 +9,31 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 // MiddleWare 
 app.use(express.json());
 app.use(cors());
+// middleware VerifyFirebaseToken
+
+const verifyFirebaseToken = async (req, res, next) => {
+    // console.log('headers in the middleware',req.headers?.authorization)
+    const token = req.headers.authorization;
+
+    if (!token) {
+        return res.status(401).send({ message: 'unauthorized access' })
+    }
+
+    try {
+        const idToken = token.split(' ')[1];
+        const decoded = await admin.auth().verifyIdToken(idToken);
+        // console.log('decoded in the token', decoded);
+        req.decoded_email = decoded.email;
+
+        next();
+    }
+    catch (err) {
+        return res.status(401).send({ message: 'unauthorized access' })
+    }
+
+}
+
+
 
 // connection string 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.BD_PASSWORD}@simple-crud-server.30cfyeq.mongodb.net/?appName=simple-crud-server`;
@@ -33,6 +58,21 @@ async function run() {
         const coursesCollection = db.collection("courses");
         const userCollection = db.collection("users");
 
+
+        // middleware admin before allowing admin activity
+        // mst be used after verifyFirebaseToken middleware
+        // const verifyAdmin = async (req, res, next) => {
+        //     const email = req.decoded_email;
+        //     const query = { email };
+        //     const user = await userCollection.findOne(query);
+
+        //     if (!user || user.role !== 'admin') {
+        //         return res.status(403).send({ message: 'forbidden access' });
+        //     }
+
+        //     next();
+        // }
+
         // user related api 
         // User Related api
         app.get('/users', async (req, res) => {
@@ -50,12 +90,48 @@ async function run() {
             res.send(result)
         })
 
-        app.get('/users/:email/role', async (req, res) => {
+        // app.get('/users/:email/role', async (req, res) => {
+        //     const email = req.params.email;
+        //     const query = { email };
+        //     const user = await userCollection.findOne(query);
+        //     res.send({ role: user?.role || 'user ' })
+        // })
+        app.get('/users/:email', async (req, res) => {
             const email = req.params.email;
-            const query = { email };
-            const user = await userCollection.findOne(query);
-            res.send({ role: user?.role || 'user ' })
-        })
+            const { fields } = req.query;
+
+            if (!email) {
+                return res.status(400).send({
+                    success: false,
+                    message: "Email is required"
+                });
+            }
+
+            const user = await userCollection.findOne({ email });
+
+            if (!user) {
+                return res.status(404).send({
+                    success: false,
+                    message: "User not found"
+                });
+            }
+
+            // যদি role চাওয়া হয়
+            if (fields === 'role') {
+                return res.send({
+                    success: true,
+                    role: user.role
+                });
+            }
+
+            // না হলে full data
+            res.send({
+                success: true,
+                user
+            });
+        });
+
+
 
         app.patch('/users/:id/role',
             //  verifyFirebaseToken, verifyAdmin, 
@@ -74,7 +150,7 @@ async function run() {
 
         app.post('/users', async (req, res) => {
             const user = req.body;
-            user.role = "user";
+            user.role = "student";
             user.createAt = new Date();
 
             const email = user.email;
