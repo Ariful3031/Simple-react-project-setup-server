@@ -4,15 +4,12 @@ require('dotenv').config()
 const port = process.env.PORT || 3000;
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-
-
 // MiddleWare 
 app.use(express.json());
 app.use(cors());
 
 // connection string 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.BD_PASSWORD}@simple-crud-server.30cfyeq.mongodb.net/?appName=simple-crud-server`;
-
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
@@ -23,7 +20,6 @@ const client = new MongoClient(uri, {
     }
 });
 
-
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
@@ -31,7 +27,7 @@ async function run() {
 
         const db = client.db("Simple-Project");
         const coursesCollection = db.collection("courses");
-        const userCollection =db.collection("users");
+        const userCollection = db.collection("users");
 
         // user related api 
         // User Related api
@@ -59,18 +55,18 @@ async function run() {
 
         app.patch('/users/:id/role',
             //  verifyFirebaseToken, verifyAdmin, 
-             async (req, res) => {
-            const id = req.params.id;
-            const roleInfo = req.body;
-            const query = { _id: new ObjectId(id) };
-            const updateDoc = {
-                $set: {
-                    role: roleInfo.role
+            async (req, res) => {
+                const id = req.params.id;
+                const roleInfo = req.body;
+                const query = { _id: new ObjectId(id) };
+                const updateDoc = {
+                    $set: {
+                        role: roleInfo.role
+                    }
                 }
-            }
-            const result = await userCollection.updateOne(query, updateDoc);
-            res.send(result);
-        })
+                const result = await userCollection.updateOne(query, updateDoc);
+                res.send(result);
+            })
 
         app.post('/users', async (req, res) => {
             const user = req.body;
@@ -88,15 +84,19 @@ async function run() {
         })
 
         // courses api 
+
         app.get('/courses', async (req, res) => {
+            try {
+                const result = await coursesCollection
+                    .find()
+                    .toArray();
 
-        })
+                res.send(result);
+            } catch (error) {
+                res.status(500).send({ message: "Failed to fetch courses", error });
+            }
+        });
 
-        // app.post('/courses', async (req, res) => {
-        //     const course = req.body;
-        //     const result = await coursesCollection.insertOne(course);
-        //     res.send(result);
-        // })
         const allowedCourseFields = {
             title: { type: "string", required: true },
             description: { type: "string", required: true },
@@ -167,64 +167,6 @@ async function run() {
             }
         });
 
-
-        // app.patch('/courses/:id', async (req, res) => {
-
-        //     // property type check 
-        //     const allowedUpdates = {
-        //         title: "string",
-        //         description: "string",
-        //         rating: "number",
-        //         price: "number",
-        //         is_published: "boolean"
-        //     };
-
-
-        //     const id = req.params.id;
-        //     const updateData = req.body;
-        //     const course = await coursesCollection.findOne({
-        //         _id: new ObjectId(id)
-        //     });
-        //     if (!course) {
-        //         return res.status(404).send({ message: "course not found" })
-        //     }
-
-        //     // 2️⃣ Validate all fields before updating
-        //     const invalidFields = [];
-
-        //     for (const key in updateData) {
-        //         if (!allowedUpdates[key]) {
-        //             invalidFields.push({ field: key, error: "Field not allowed" });
-        //         } else {
-        //             const expectedType = allowedUpdates[key];
-        //             const value = updateData[key];
-        //             if (expectedType === "number" && typeof value !== "number") {
-        //                 invalidFields.push({ field: key, error: `Expected number, got ${typeof value}` });
-        //             }
-        //             if (expectedType === "string" && typeof value !== "string") {
-        //                 invalidFields.push({ field: key, error: `Expected string, got ${typeof value}` });
-        //             }
-        //             if (expectedType === "boolean" && typeof value !== "boolean") {
-        //                 invalidFields.push({ field: key, error: `Expected boolean, got ${typeof value}` });
-        //             }
-        //         }
-        //     }
-
-        //     // 3️⃣ If any invalid field → abort
-        //     if (invalidFields.length > 0) {
-        //         return res.status(400).send({
-        //             message: "Validation failed",
-        //             errors: invalidFields
-        //         });
-        //     }
-
-        //     // 4️⃣ All fields valid → proceed with update
-        //     await coursesCollection.updateOne(
-        //         { _id: new ObjectId(id) },
-        //         { $set: updateData }
-        //     );
-        //     res.send(result)
-        // })
         const allowedUpdates = {
             title: "string",
             description: "string",
@@ -293,8 +235,8 @@ async function run() {
 
 
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        // await client.db("admin").command({ ping: 1 });
+        // console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
         // await client.close();
