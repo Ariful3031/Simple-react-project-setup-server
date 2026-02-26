@@ -71,27 +71,47 @@ async function run() {
 
         // user related api 
         // User Related api
-        app.get('/users', async (req, res) => {
-            const searchText = req.query.searchText;
-            const query = {};
-            if (searchText) {
-                // query.displayName = {$regex: searchText, $options: 'i'}
-                query.$or = [
-                    { displayName: { $regex: searchText, $options: 'i' } },
-                    { email: { $regex: searchText, $options: 'i' } }
-                ]
-            }
-            const cursor = userCollection.find(query).sort({ createAt: -1 }).limit(5);
-            const result = await cursor.toArray();
-            res.send(result)
-        })
 
-        // app.get('/users/:email/role', async (req, res) => {
-        //     const email = req.params.email;
-        //     const query = { email };
-        //     const user = await userCollection.findOne(query);
-        //     res.send({ role: user?.role || 'user ' })
-        // })
+
+
+
+
+        app.get('/users', async (req, res) => {
+            try {
+                const searchText = req.query.searchText;   // /users?role=student&searchText=john
+                const role = req.query.role; // /users?role=student / teacher / admin
+                const sortOrder = req.query.sort || "latest";  //users?sort=latest// latest / oldest
+                const query = {};
+
+                // Role filter
+                if (role) {
+                    query.role = role;
+                }
+
+                // Search filter
+                if (searchText) {
+                    query.$or = [
+                        { displayName: { $regex: searchText, $options: 'i' } },
+                        { email: { $regex: searchText, $options: 'i' } }
+                    ];
+                }
+
+                // Sort condition
+                const sort = {
+                    createAt: sortOrder === "latest" ? -1 : 1
+                };
+
+                const cursor = userCollection.find(query).sort(sort).limit(5);
+                const result = await cursor.toArray();
+
+                res.send(result);
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({ message: "Failed to fetch users" });
+            }
+        });
+
+
         app.get('/users/:email', async (req, res) => {
             const email = req.params.email;
             const { fields } = req.query;
@@ -102,16 +122,13 @@ async function run() {
                     message: "Email is required"
                 });
             }
-
             const user = await userCollection.findOne({ email });
-
             if (!user) {
                 return res.status(404).send({
                     success: false,
                     message: "User not found"
                 });
             }
-
             // যদি role চাওয়া হয়
             if (fields === 'role') {
                 return res.send({
@@ -119,7 +136,6 @@ async function run() {
                     role: user.role
                 });
             }
-
             // না হলে full data
             res.send({
                 success: true,
@@ -128,21 +144,45 @@ async function run() {
         });
 
 
-
-        app.patch('/users/:id/role',
-            //  verifyFirebaseToken, verifyAdmin, 
-            async (req, res) => {
+        app.patch('/users/:id', async (req, res) => {
+            try {
                 const id = req.params.id;
-                const roleInfo = req.body;
-                const query = { _id: new ObjectId(id) };
-                const updateDoc = {
-                    $set: {
-                        role: roleInfo.role
-                    }
+                const updateData = req.body;
+
+                if (!ObjectId.isValid(id)) {
+                    return res.status(400).send({ message: "Invalid user ID" });
                 }
-                const result = await userCollection.updateOne(query, updateDoc);
-                res.send(result);
-            })
+
+
+                const result = await userCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    { $set: updateData }
+                );
+
+                const updatedUser = await userCollection.findOne({ _id: new ObjectId(id) });
+
+                res.status(200).send({ message: "User updated successfully", user: updatedUser });
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({ message: "Internal server error" });
+            }
+        });
+
+
+        // app.patch('/users/:id/role',
+        //     //  verifyFirebaseToken, verifyAdmin, 
+        //     async (req, res) => {
+        //         const id = req.params.id;
+        //         const roleInfo = req.body;
+        //         const query = { _id: new ObjectId(id) };
+        //         const updateDoc = {
+        //             $set: {
+        //                 role: roleInfo.role
+        //             }
+        //         }
+        //         const result = await userCollection.updateOne(query, updateDoc);
+        //         res.send(result);
+        //     })
 
         app.post('/users', async (req, res) => {
             const user = req.body;
@@ -161,9 +201,8 @@ async function run() {
 
         // courses api 
 
-        app.get('/courses', async (req, res) => {
+        app.get("/courses", async (req, res) => {
             try {
-                // সব courses fetch করা
                 const courses = await coursesCollection.find({}).toArray();
                 res.status(200).send(courses);
             } catch (error) {
@@ -173,69 +212,16 @@ async function run() {
         });
 
 
-        const allowedCourseFields = {
-            title: { type: "string", required: true },
-            description: { type: "string", required: true },
-            rating: { type: "number", required: true, min: 0, max: 5 },
-            price: { type: "number", required: true, min: 0 },
-            is_published: { type: "boolean", required: true }
-        };
-        app.post('/courses', async (req, res) => {
+        app.post("/courses", async (req, res) => {
             try {
                 const course = req.body;
-                const errors = [];
 
-                // 1️⃣ Validate each field
-                for (const field in allowedCourseFields) {
-                    const rules = allowedCourseFields[field];
-                    const value = course[field];
-
-                    // Required field missing
-                    if (rules.required && (value === undefined || value === null)) {
-                        errors.push({ field, error: "Field is required" });
-                        continue;
-                    }
-
-                    // Skip validation if field optional & not provided
-                    if (value === undefined) continue;
-
-                    // Type check
-                    if (rules.type === "string" && typeof value !== "string") {
-                        errors.push({ field, error: `Expected string, got ${typeof value}` });
-                    }
-                    if (rules.type === "number" && typeof value !== "number") {
-                        errors.push({ field, error: `Expected number, got ${typeof value}` });
-                    }
-                    if (rules.type === "boolean" && typeof value !== "boolean") {
-                        errors.push({ field, error: `Expected boolean, got ${typeof value}` });
-                    }
-
-                    // Extra checks: min/max for number
-                    if (rules.type === "number") {
-                        if (rules.min !== undefined && value < rules.min) {
-                            errors.push({ field, error: `Value must be >= ${rules.min}` });
-                        }
-                        if (rules.max !== undefined && value > rules.max) {
-                            errors.push({ field, error: `Value must be <= ${rules.max}` });
-                        }
-                    }
-                }
-
-                // 2️⃣ Check for invalid extra fields
-                for (const field in course) {
-                    if (!allowedCourseFields[field]) {
-                        errors.push({ field, error: "Field not allowed" });
-                    }
-                }
-
-                // 3️⃣ If any errors → return 400
-                if (errors.length > 0) {
-                    return res.status(400).send({ message: "Validation failed", errors });
-                }
-
-                // 4️⃣ All valid → insert into DB
                 const result = await coursesCollection.insertOne(course);
-                res.status(201).send({ message: "Course created successfully", courseId: result.insertedId });
+
+                res.status(201).send({
+                    message: "Course created successfully",
+                    courseId: result.insertedId,
+                });
 
             } catch (error) {
                 console.error(error);
@@ -243,13 +229,7 @@ async function run() {
             }
         });
 
-        const allowedUpdates = {
-            title: "string",
-            description: "string",
-            rating: "number",
-            price: "number",
-            is_published: "boolean"
-        };
+
         app.patch("/courses/:id", async (req, res) => {
             try {
                 const id = req.params.id;
@@ -259,55 +239,34 @@ async function run() {
                     return res.status(400).send({ message: "Invalid course ID" });
                 }
 
-                // 1️⃣ Validate course exists
-                const course = await coursesCollection.findOne({ _id: new ObjectId(id) });
+                const course = await coursesCollection.findOne({
+                    _id: new ObjectId(id),
+                });
+
                 if (!course) {
                     return res.status(404).send({ message: "Course not found" });
                 }
 
-                // 2️⃣ Validate all fields before updating
-                const invalidFields = [];
-
-                for (const key in updateData) {
-                    if (!allowedUpdates[key]) {
-                        invalidFields.push({ field: key, error: "Field not allowed" });
-                    } else {
-                        const expectedType = allowedUpdates[key];
-                        const value = updateData[key];
-                        if (expectedType === "number" && typeof value !== "number") {
-                            invalidFields.push({ field: key, error: `Expected number, got ${typeof value}` });
-                        }
-                        if (expectedType === "string" && typeof value !== "string") {
-                            invalidFields.push({ field: key, error: `Expected string, got ${typeof value}` });
-                        }
-                        if (expectedType === "boolean" && typeof value !== "boolean") {
-                            invalidFields.push({ field: key, error: `Expected boolean, got ${typeof value}` });
-                        }
-                    }
-                }
-
-                // 3️⃣ If any invalid field → abort
-                if (invalidFields.length > 0) {
-                    return res.status(400).send({
-                        message: "Validation failed",
-                        errors: invalidFields
-                    });
-                }
-
-                // 4️⃣ All fields valid → proceed with update
                 await coursesCollection.updateOne(
                     { _id: new ObjectId(id) },
                     { $set: updateData }
                 );
 
-                const updatedCourse = await coursesCollection.findOne({ _id: new ObjectId(id) });
-                res.status(200).send({ message: "Course updated successfully", course: updatedCourse });
+                const updatedCourse = await coursesCollection.findOne({
+                    _id: new ObjectId(id),
+                });
+
+                res.status(200).send({
+                    message: "Course updated successfully",
+                    course: updatedCourse,
+                });
 
             } catch (error) {
                 console.error(error);
                 res.status(500).send({ message: "Internal server error" });
             }
         });
+
 
 
         // Send a ping to confirm a successful connection
