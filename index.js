@@ -73,14 +73,13 @@ async function run() {
         // User Related api
 
 
-
-
-
         app.get('/users', async (req, res) => {
             try {
-                const searchText = req.query.searchText;   // /users?role=student&searchText=john
-                const role = req.query.role; // /users?role=student / teacher / admin
-                const sortOrder = req.query.sort || "latest";  //users?sort=latest// latest / oldest
+                const searchText = req.query.searchText;
+                const role = req.query.role;
+                const sortOrder = req.query.sort; // latest / oldest
+                const categoryRole = req.query.categoryRole; // all cateroy
+
                 const query = {};
 
                 // Role filter
@@ -88,23 +87,39 @@ async function run() {
                     query.role = role;
                 }
 
-                // Search filter
-                if (searchText) {
-                    query.$or = [
-                        { displayName: { $regex: searchText, $options: 'i' } },
-                        { email: { $regex: searchText, $options: 'i' } }
-                    ];
+                // Category filter
+                if (categoryRole && categoryRole !== "all") {
+                    query.categoryRole = categoryRole;
                 }
 
-                // Sort condition
-                const sort = {
-                    createAt: sortOrder === "latest" ? -1 : 1
-                };
+                // Search filter (conditional)
+                if (searchText) {
+                    query.$or = [
+                        { displayName: { $regex: searchText, $options: "i" } },
+                        { email: { $regex: searchText, $options: "i" } },
+                    ];
+                }
+                // Dynamic Sort
+                let sort = {};
 
-                const cursor = userCollection.find(query).sort(sort).limit(5);
-                const result = await cursor.toArray();
+                // Admin Dashboard → date sort
+                if (sortOrder) {
+                    sort.createAt = sortOrder === "latest" ? -1 : 1;
+                }
+
+
+                // Instructor page → category sort
+                if (!sortOrder && categoryRole) {
+                    sort.categoryRole = 1;
+                }
+
+                const result = await userCollection
+                    .find(query)
+                    .sort(sort)
+                    .toArray();
 
                 res.send(result);
+
             } catch (error) {
                 console.error(error);
                 res.status(500).send({ message: "Failed to fetch users" });
@@ -203,8 +218,40 @@ async function run() {
 
         app.get("/courses", async (req, res) => {
             try {
-                const courses = await coursesCollection.find({}).toArray();
+                const { searchText, category, sort } = req.query;
+
+                const query = {};
+
+                // 🔹 Search by title
+                if (searchText) {
+                    // query.title = { $regex: searchText, $options: "i" };
+
+                    query.$or = [
+                        { title: { $regex: searchText, $options: 'i' } },
+                        { examTitle: { $regex: searchText, $options: 'i' } }
+                    ];
+                }
+
+
+
+                // 🔹 Filter by category title
+                if (category) {
+                    query["category.category_title"] = category;
+                }
+
+                // 🔹 Sort (latest / oldest)
+                let sortOrder = {};
+                if (sort) {
+                    sortOrder.createAt = sort === "latest" ? -1 : 1;
+                }
+
+                const courses = await coursesCollection
+                    .find(query)
+                    .sort(sortOrder)
+                    .toArray();
+
                 res.status(200).send(courses);
+
             } catch (error) {
                 console.error(error);
                 res.status(500).send({ message: "Failed to fetch courses" });
