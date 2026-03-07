@@ -7,6 +7,38 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 // MiddleWare 
 app.use(express.json());
 app.use(cors());
+
+
+// course er image er jonno multer sue kore 
+
+const multer = require("multer");
+const path = require("path");
+
+// Multer Storage Setup
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, "uploads/");
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+        cb(null, uniqueSuffix + path.extname(file.originalname));
+    },
+});
+
+const upload = multer({ storage });
+
+// Create uploads folder if not exists
+const fs = require("fs");
+if (!fs.existsSync("uploads")) {
+    fs.mkdirSync("uploads");
+}
+
+// Serve images statically
+app.use("/uploads", express.static("uploads"));
+
+
+
+
 // middleware VerifyFirebaseToken
 
 // const verifyFirebaseToken = async (req, res, next) => {
@@ -53,6 +85,7 @@ async function run() {
         const db = client.db("Simple-Project");
         const coursesCollection = db.collection("courses");
         const userCollection = db.collection("users");
+        const countersCourseCollection = db.collection("course-counters");
 
 
         // middleware admin before allowing admin activity
@@ -71,6 +104,9 @@ async function run() {
 
         // user related api 
         // User Related api
+
+
+
 
 
         app.get('/users', async (req, res) => {
@@ -259,14 +295,45 @@ async function run() {
         });
 
 
-        app.post("/courses", async (req, res) => {
-            try {
-                const course = req.body;
 
-                const result = await coursesCollection.insertOne(course);
+        const getNextSequence = async (name) => {
+            const result = await countersCourseCollection.findOneAndUpdate(
+                { _id: name },
+                { $inc: { seq: 1 } },
+                { upsert: true, returnDocument: "after" }
+            );
+
+            if (!result || !result.value) {
+                const doc = await countersCourseCollection.findOne({ _id: name });
+                return doc?.seq || 1;
+            }
+
+            return result.value.seq;
+        };
+
+
+        app.post("/courses", upload.single("thumbnail"), async (req, res) => {
+            try {
+                const courseData = JSON.parse(req.body.data);
+
+                // Auto Increment ID
+                const nextId = await getNextSequence("courseId");
+                courseData.id = nextId.toString(); // যদি string রাখতে চান
+
+                // If image uploaded
+                if (req.file) {
+                    courseData.thumbnail = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+                } else {
+                    courseData.thumbnail = "";
+                }
+
+                // createdAt auto
+                courseData.createdAt = new Date().toISOString();
+
+                const result = await coursesCollection.insertOne(courseData);
 
                 res.status(201).send({
-                    message: "Course created successfully",
+                    message: "success",
                     courseId: result.insertedId,
                 });
 
@@ -275,6 +342,8 @@ async function run() {
                 res.status(500).send({ message: "Internal server error" });
             }
         });
+
+
 
 
         app.patch("/courses/:id", async (req, res) => {
