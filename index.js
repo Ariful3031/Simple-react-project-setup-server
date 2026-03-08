@@ -312,38 +312,82 @@ async function run() {
         };
 
 
+        // app.post("/courses", upload.single("thumbnail"), async (req, res) => {
+        //     try {
+        //         const courseData = JSON.parse(req.body.data);
+
+        //         // Auto Increment ID
+        //         const nextId = await getNextSequence("courseId");
+        //         courseData.id = nextId.toString(); // যদি string রাখতে চান
+
+        //         // If image uploaded
+        //         if (req.file) {
+        //             courseData.thumbnail = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+        //         } else {
+        //             courseData.thumbnail = "";
+        //         }
+
+        //         // createdAt auto
+        //         courseData.createdAt = new Date().toISOString();
+
+        //         const result = await coursesCollection.insertOne(courseData);
+
+        //         res.status(201).send({
+        //             message: "success",
+        //             courseId: result.insertedId,
+        //         });
+
+        //     } catch (error) {
+        //         console.error(error);
+        //         res.status(500).send({ message: "Internal server error" });
+        //     }
+        // });
+
+
         app.post("/courses", upload.single("thumbnail"), async (req, res) => {
             try {
+
                 const courseData = JSON.parse(req.body.data);
 
-                // Auto Increment ID
-                const nextId = await getNextSequence("courseId");
-                courseData.id = nextId.toString(); // যদি string রাখতে চান
+                if (courseData.instructorIds?.length) {
 
-                // If image uploaded
+                    const instructors = await userCollection
+                        .find({
+                            _id: { $in: courseData.instructorIds.map(id => new ObjectId(id)) }
+                        })
+                        .project({
+                            _id: 1,
+                            email: 1,
+                            photoURL: 1,
+                            displayName: 1,
+                            jobTitle: 1
+                        })
+                        .toArray();
+
+                    courseData.instructors = instructors;
+                }
+
+
+                const nextId = await getNextSequence("courseId");
+                courseData.id = nextId.toString();
+
                 if (req.file) {
                     courseData.thumbnail = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
                 } else {
                     courseData.thumbnail = "";
                 }
 
-                // createdAt auto
                 courseData.createdAt = new Date().toISOString();
 
                 const result = await coursesCollection.insertOne(courseData);
 
-                res.status(201).send({
-                    message: "success",
-                    courseId: result.insertedId,
-                });
+                res.status(201).send({ message: "success" });
 
             } catch (error) {
                 console.error(error);
                 res.status(500).send({ message: "Internal server error" });
             }
         });
-
-
 
 
         app.patch("/courses/:id", async (req, res) => {
