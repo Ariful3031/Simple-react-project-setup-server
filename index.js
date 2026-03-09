@@ -36,9 +36,6 @@ if (!fs.existsSync("uploads")) {
 // Serve images statically
 app.use("/uploads", express.static("uploads"));
 
-
-
-
 // middleware VerifyFirebaseToken
 
 // const verifyFirebaseToken = async (req, res, next) => {
@@ -84,8 +81,10 @@ async function run() {
 
         const db = client.db("Simple-Project");
         const coursesCollection = db.collection("courses");
+        const categoryCollecton = db.collection("categories")
         const userCollection = db.collection("users");
         const countersCourseCollection = db.collection("course-counters");
+        const countersCategoyCollection = db.collection("category-counters");
 
 
         // middleware admin before allowing admin activity
@@ -104,9 +103,6 @@ async function run() {
 
         // user related api 
         // User Related api
-
-
-
 
 
         app.get('/users', async (req, res) => {
@@ -161,7 +157,6 @@ async function run() {
                 res.status(500).send({ message: "Failed to fetch users" });
             }
         });
-
 
         app.get('/users/:email', async (req, res) => {
             const email = req.params.email;
@@ -220,21 +215,6 @@ async function run() {
         });
 
 
-        // app.patch('/users/:id/role',
-        //     //  verifyFirebaseToken, verifyAdmin, 
-        //     async (req, res) => {
-        //         const id = req.params.id;
-        //         const roleInfo = req.body;
-        //         const query = { _id: new ObjectId(id) };
-        //         const updateDoc = {
-        //             $set: {
-        //                 role: roleInfo.role
-        //             }
-        //         }
-        //         const result = await userCollection.updateOne(query, updateDoc);
-        //         res.send(result);
-        //     })
-
         app.post('/users', async (req, res) => {
             const user = req.body;
             user.role = "student";
@@ -250,30 +230,86 @@ async function run() {
             res.send(result);
         })
 
+
+        // category api
+        app.get("/categories", async (req, res) => {
+            try {
+
+                const categories = await categoryCollecton.find().toArray();
+                res.status(200).send(categories);
+            } catch (error) {
+                console.error("Fetch error:", error);
+                res.status(500).send({ message: "Failed to fetch categories" });
+            }
+        });
+
+
+        const getCategoryNextSequence = async (name) => {
+            const result = await countersCategoyCollection.findOneAndUpdate(
+                { _id: name },
+                { $inc: { seq: 1 } },
+                { upsert: true, returnDocument: "after" }
+            );
+
+            if (!result || !result.value) {
+                const doc = await countersCategoyCollection.findOne({ _id: name });
+                return doc?.seq || 1;
+            }
+
+            return result.value.seq;
+        };
+
+        app.post("/categories", async (req, res) => {
+
+            try {
+
+                const categoryData = req.body;
+
+                const nextId = await getCategoryNextSequence("categoryId");
+                categoryData.categoryId = nextId.toString();
+
+                const result = await categoryCollecton.insertOne(categoryData)
+                res.status(201).send({ message: "success" })
+
+            } catch (error) {
+                console.error(error)
+                res.status(500).send({ message: "Internal server error" });
+            }
+        })
+
+
+
         // courses api 
 
         app.get("/courses", async (req, res) => {
             try {
-                const { searchText, category, sort } = req.query;
+                const { searchText, category, sort, id, status } = req.query;
 
                 const query = {};
 
-                // 🔹 Search by title
-                if (searchText) {
-                    // query.title = { $regex: searchText, $options: "i" };
-
-                    query.$or = [
-                        { title: { $regex: searchText, $options: 'i' } },
-                        { examTitle: { $regex: searchText, $options: 'i' } }
-                    ];
+                // 🔹 Filter by Course ID
+                if (id) {
+                    query.id = id; // আপনার database এ যেই id field আছে
                 }
 
-
+                // 🔹 Search by title
+                if (searchText) {
+                    query.$or = [
+                        { title: { $regex: searchText, $options: "i" } },
+                        { examTitle: { $regex: searchText, $options: "i" } }
+                    ];
+                }
 
                 // 🔹 Filter by category title
                 if (category) {
                     query["category.category_title"] = category;
                 }
+
+                // 🔹 Filter by status (publish / draft)
+                if (status === "publish" || status === "draft") {
+                    query.status = status;
+                }
+                // যদি status na thake, sob status er courses dibe (no filter)
 
                 // 🔹 Sort (latest / oldest)
                 let sortOrder = {};
@@ -294,8 +330,6 @@ async function run() {
             }
         });
 
-
-
         const getNextSequence = async (name) => {
             const result = await countersCourseCollection.findOneAndUpdate(
                 { _id: name },
@@ -310,39 +344,6 @@ async function run() {
 
             return result.value.seq;
         };
-
-
-        // app.post("/courses", upload.single("thumbnail"), async (req, res) => {
-        //     try {
-        //         const courseData = JSON.parse(req.body.data);
-
-        //         // Auto Increment ID
-        //         const nextId = await getNextSequence("courseId");
-        //         courseData.id = nextId.toString(); // যদি string রাখতে চান
-
-        //         // If image uploaded
-        //         if (req.file) {
-        //             courseData.thumbnail = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
-        //         } else {
-        //             courseData.thumbnail = "";
-        //         }
-
-        //         // createdAt auto
-        //         courseData.createdAt = new Date().toISOString();
-
-        //         const result = await coursesCollection.insertOne(courseData);
-
-        //         res.status(201).send({
-        //             message: "success",
-        //             courseId: result.insertedId,
-        //         });
-
-        //     } catch (error) {
-        //         console.error(error);
-        //         res.status(500).send({ message: "Internal server error" });
-        //     }
-        // });
-
 
         app.post("/courses", upload.single("thumbnail"), async (req, res) => {
             try {
@@ -389,44 +390,36 @@ async function run() {
             }
         });
 
-
-        app.patch("/courses/:id", async (req, res) => {
+        app.patch("/courses/:id", upload.single("thumbnail"), async (req, res) => {
             try {
-                const id = req.params.id;
-                const updateData = req.body;
+                const courseId = req.params.id; // 🟢 custom id, _id নয়
 
-                if (!ObjectId.isValid(id)) {
-                    return res.status(400).send({ message: "Invalid course ID" });
+                // Multer parse করার পর req.body.data আসবে
+                const updateData = JSON.parse(req.body.data);
+
+                // যদি নতুন image আসে
+                if (req.file) {
+                    updateData.thumbnail = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
                 }
 
-                const course = await coursesCollection.findOne({
-                    _id: new ObjectId(id),
-                });
-
-                if (!course) {
-                    return res.status(404).send({ message: "Course not found" });
-                }
+                // 🔹 Custom id দিয়ে course খোঁজা
+                const course = await coursesCollection.findOne({ id: courseId });
+                if (!course) return res.status(404).send({ message: "Course not found" });
 
                 await coursesCollection.updateOne(
-                    { _id: new ObjectId(id) },
+                    { id: courseId },
                     { $set: updateData }
                 );
 
-                const updatedCourse = await coursesCollection.findOne({
-                    _id: new ObjectId(id),
-                });
+                const updatedCourse = await coursesCollection.findOne({ id: courseId });
 
-                res.status(200).send({
-                    message: "Course updated successfully",
-                    course: updatedCourse,
-                });
+                res.status(200).send({ message: "success", course: updatedCourse });
 
             } catch (error) {
                 console.error(error);
                 res.status(500).send({ message: "Internal server error" });
             }
         });
-
 
 
         // Send a ping to confirm a successful connection
