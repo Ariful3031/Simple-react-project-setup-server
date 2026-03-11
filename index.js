@@ -234,8 +234,26 @@ async function run() {
         // category api
         app.get("/categories", async (req, res) => {
             try {
+                const { searchText, sort, id, } = req.query;
 
-                const categories = await categoryCollecton.find().toArray();
+                let query = {}; // 🔹 এটা declare করতে হবে
+                if (id) {
+                    query.categoryId = id;
+                }
+
+                // 🔹 Search by title
+                if (searchText) {
+                    query.$or = [
+                        { category_title: { $regex: searchText, $options: "i" } },
+                        // { examTitle: { $regex: searchText, $options: "i" } }
+                    ];
+                }
+                let sortOrder = {};
+                if (sort) {
+                    sortOrder.createAt = sort === "latest" ? -1 : 1;
+                }
+
+                const categories = await categoryCollecton.find(query).sort(sortOrder).toArray();
                 res.status(200).send(categories);
             } catch (error) {
                 console.error("Fetch error:", error);
@@ -259,23 +277,74 @@ async function run() {
             return result.value.seq;
         };
 
-        app.post("/categories", async (req, res) => {
+        app.post("/category", upload.single("image"), async (req, res) => {
 
             try {
 
-                const categoryData = req.body;
+                const categoryData = JSON.parse(req.body.data);
 
+                // Auto Increment Category ID
                 const nextId = await getCategoryNextSequence("categoryId");
                 categoryData.categoryId = nextId.toString();
 
-                const result = await categoryCollecton.insertOne(categoryData)
-                res.status(201).send({ message: "success" })
+                // Image Upload
+                if (req.file) {
+                    categoryData.image = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+                } else {
+                    categoryData.image = "";
+                }
+
+                // Created Time
+                categoryData.createdAt = new Date().toISOString();
+
+                const result = await categoryCollecton.insertOne(categoryData);
+
+                res.status(201).send({ message: "success" });
 
             } catch (error) {
-                console.error(error)
+
+                console.error(error);
+                res.status(500).send({ message: "Internal server error" });
+
+            }
+
+        });
+
+        app.patch("/category/:id", upload.single("image"), async (req, res) => {
+            try {
+                const CategoryId = req.params.id;
+
+                const updateData = req.body.data ? JSON.parse(req.body.data) : {};
+
+                // 🔹 নতুন image দিলে
+                if (req.file) {
+                    updateData.image = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+                }
+
+                // 🔹 image remove করলে
+                if (updateData.removeImage) {
+                    updateData.image = "";
+                }
+
+                delete updateData.removeImage;
+
+                await categoryCollecton.updateOne(
+                    { categoryId: CategoryId },
+                    { $set: updateData }
+                );
+
+                const updatedCategory = await categoryCollecton.findOne({ categoryId: CategoryId });
+
+                res.status(200).send({
+                    message: "success",
+                    category: updatedCategory
+                });
+
+            } catch (error) {
+                console.error(error);
                 res.status(500).send({ message: "Internal server error" });
             }
-        })
+        });
 
 
 
