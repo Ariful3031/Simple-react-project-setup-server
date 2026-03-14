@@ -190,16 +190,23 @@ async function run() {
         });
 
 
-        app.patch('/users/:id', async (req, res) => {
+        app.patch('/users/:id', upload.single("photo"), async (req, res) => {
             try {
                 const id = req.params.id;
-                const updateData = req.body;
+
+                // Parse other fields if sent as JSON in 'data'
+                const updateData = req.body.data ? JSON.parse(req.body.data) : req.body;
+
+                // If a new photo is uploaded, set its URL
+                if (req.file) {
+                    updateData.photoURL = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+                }
 
                 if (!ObjectId.isValid(id)) {
                     return res.status(400).send({ message: "Invalid user ID" });
                 }
 
-
+                // Update the user
                 const result = await userCollection.updateOne(
                     { _id: new ObjectId(id) },
                     { $set: updateData }
@@ -208,13 +215,14 @@ async function run() {
                 const updatedUser = await userCollection.findOne({ _id: new ObjectId(id) });
 
                 res.status(200).send({ message: "User updated successfully", user: updatedUser });
+
             } catch (error) {
                 console.error(error);
                 res.status(500).send({ message: "Internal server error" });
             }
         });
 
-
+        
         app.post('/users', async (req, res) => {
             const user = req.body;
             user.role = "student";
