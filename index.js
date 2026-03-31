@@ -85,7 +85,7 @@ async function run() {
         const userCollection = db.collection("users");
         const countersCourseCollection = db.collection("course-counters");
         const countersCategoyCollection = db.collection("category-counters");
-
+        const enrollCollection = db.collection("enrollments");
 
         // middleware admin before allowing admin activity
         // mst be used after verifyFirebaseToken middleware
@@ -101,8 +101,10 @@ async function run() {
         //     next();
         // }
 
-        // user related api 
+
         // User Related api
+
+
 
 
         app.get('/users', async (req, res) => {
@@ -222,7 +224,7 @@ async function run() {
             }
         });
 
-        
+
         app.post('/users', async (req, res) => {
             const user = req.body;
             user.role = "student";
@@ -351,6 +353,237 @@ async function run() {
             } catch (error) {
                 console.error(error);
                 res.status(500).send({ message: "Internal server error" });
+            }
+        });
+
+        // enrolled ment course api 
+
+        app.post("/enroll", async (req, res) => {
+            try {
+                const { userEmail, courseId } = req.body;
+
+                const exist = await enrollCollection.findOne({ userEmail, courseId });
+
+                if (exist) {
+                    return res.send({ message: "Already Enrolled" });
+                }
+
+                const enrollData = {
+                    userEmail,
+                    courseId,
+                    enrolledAt: new Date()
+                };
+
+                await enrollCollection.insertOne(enrollData);
+
+                res.send({ success: true });
+
+            } catch (err) {
+                res.status(500).send({ message: "Enroll failed" });
+            }
+        });
+
+        // get my course api
+        app.get("/my-enroll-course", async (req, res) => {
+            try {
+                const email = req.query.email;
+
+                const enrolled = await enrollCollection.find({ userEmail: email }).toArray();
+
+                const courseIds = enrolled.map(item => item.courseId);
+
+                const courses = await coursesCollection
+                    .find({ id: { $in: courseIds } })
+                    .toArray();
+
+                res.send(courses);
+
+            } catch (err) {
+                res.status(500).send({ message: "Failed to fetch" });
+            }
+        });
+
+        // single course
+        // app.get("/my-enroll-single-course/:id", async (req, res) => {
+        //     try {
+        //         const id = req.params.id;
+
+        //         const course = await coursesCollection.findOne({ id });
+
+        //         if (!course) {
+        //             return res.status(404).send({ message: "Course not found" });
+        //         }
+
+        //         res.send(course);
+
+        //     } catch (err) {
+        //         res.status(500).send({ message: "Error fetching course" });
+        //     }
+        // });
+
+        app.get("/my-enroll-single-course/:id", async (req, res) => {
+            try {
+                const email = req.query.email;
+                const id = req.params.id;
+
+                const isEnrolled = await enrollCollection.findOne({
+                    userEmail: email,
+                    courseId: id
+                });
+
+                if (!isEnrolled) {
+                    return res.status(403).send({ message: "Access denied" });
+                }
+
+                const course = await coursesCollection.findOne({ id });
+
+                if (!course) {
+                    return res.status(404).send({ message: "Course not found" });
+                }
+
+                res.send(course);
+
+            } catch (err) {
+                res.status(500).send({ message: "Error fetching course" });
+            }
+        });
+
+
+        // courses contents
+
+        app.patch("/courses/add-content", async (req, res) => {
+            try {
+                const { courseId, topic, contentName, contentLink, type } = req.body;
+
+                // 🔹 Course find (custom id দিয়ে)
+                const course = await coursesCollection.findOne({ id: courseId });
+
+                if (!course) {
+                    return res.status(404).send({ message: "Course not found" });
+                }
+
+                // 🔹 New Content
+                const newContent = {
+                    contentName,
+                    contentLink,
+                    type,
+                };
+
+                // 🔹 Topic exist check
+                const topicIndex = course.course_contents?.findIndex(
+                    (item) => item.topic === topic
+                );
+
+                if (topicIndex !== -1 && topicIndex !== undefined) {
+                    // 👉 Topic exists → push content
+                    await coursesCollection.updateOne(
+                        { id: courseId, "course_contents.topic": topic },
+                        {
+                            $push: {
+                                "course_contents.$.contents": newContent,
+                            },
+                        }
+                    );
+                } else {
+                    // 👉 Topic নেই → নতুন topic create + content add
+                    await coursesCollection.updateOne(
+                        { id: courseId },
+                        {
+                            $push: {
+                                course_contents: {
+                                    topic,
+                                    contents: [newContent],
+                                },
+                            },
+                        }
+                    );
+                }
+
+                res.send({
+                    status: true,
+                    message: "Content added successfully",
+                });
+
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({ message: "Failed to add content" });
+            }
+        });
+
+        app.patch("/courses/update-content", async (req, res) => {
+            try {
+                const { courseId, moduleIndex, subIndex, data } = req.body;
+
+                const course = await coursesCollection.findOne({
+                    _id: new ObjectId(courseId),
+                });
+
+                if (!course) {
+                    return res.status(404).send({ message: "Course not found" });
+                }
+
+                // 🔥 topics clone
+                const topics = course.topics || [];
+
+                if (!topics[moduleIndex]) {
+                    return res.status(400).send({ message: "Module not found" });
+                }
+
+                if (!topics[moduleIndex].sub_topics[subIndex]) {
+                    return res.status(400).send({ message: "Content not found" });
+                }
+
+                // 🔥 update data
+                topics[moduleIndex].sub_topics[subIndex] = {
+                    ...topics[moduleIndex].sub_topics[subIndex],
+                    title: data.title,
+                    type: data.type,
+                    link: data.link,
+                };
+
+                // 🔥 save updated topics
+                await coursesCollection.updateOne(
+                    { _id: new ObjectId(courseId) },
+                    {
+                        $set: { topics },
+                    }
+                );
+
+                res.send({
+                    success: true,
+                    message: "Content updated successfully",
+                });
+
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({ message: "Update failed" });
+            }
+        });
+
+
+        app.patch("/courses/update-outline/:id", async (req, res) => {
+            try {
+                const courseId = req.params.id;
+                const { topics } = req.body;
+
+                const result = await coursesCollection.updateOne(
+                    { id: courseId },
+                    {
+                        $set: {
+                            topics: topics, // 🔥 only this field update
+                        },
+                    }
+                );
+
+                res.send({
+                    status: true,
+                    message: "Outline updated successfully",
+                    result,
+                });
+            } catch (error) {
+                res.status(500).send({
+                    message: "Failed to update outline",
+                });
             }
         });
 
@@ -497,6 +730,8 @@ async function run() {
                 res.status(500).send({ message: "Internal server error" });
             }
         });
+
+
 
 
         // Send a ping to confirm a successful connection
