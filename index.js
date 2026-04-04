@@ -1,19 +1,3 @@
-// const express = require('express');
-// const serverless = require('serverless-http');
-// const app = express();
-
-// // Root route
-// app.get('/', (req, res) => {
-//   res.send('Hello! This is the home page.');
-// });
-
-// // Example API route
-// app.get('/courses', (req, res) => {
-//   res.json([{ id: 1, name: 'React Course' }]);
-// });
-
-// // Export for Vercel
-// module.exports.handler = serverless(app);
 
 
 
