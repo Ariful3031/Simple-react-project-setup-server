@@ -1,40 +1,84 @@
+// const express = require('express');
+// const serverless = require('serverless-http');
+// const app = express();
+
+// // Root route
+// app.get('/', (req, res) => {
+//   res.send('Hello! This is the home page.');
+// });
+
+// // Example API route
+// app.get('/courses', (req, res) => {
+//   res.json([{ id: 1, name: 'React Course' }]);
+// });
+
+// // Export for Vercel
+// module.exports.handler = serverless(app);
+
+
+
+
 const express = require('express')
+const serverless = require('serverless-http'); // npm install serverless-http
 const app = express()
 require('dotenv').config()
 const port = process.env.PORT || 3000;
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-// MiddleWare 
+// MiddleWare
 app.use(express.json());
 app.use(cors());
+const cloudinary = require("cloudinary").v2;
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
 
 
-// course er image er jonno multer sue kore 
+// course er image er jonno multer sue kore
 
 const multer = require("multer");
-const path = require("path");
+// const path = require("path");
 
 // Multer Storage Setup
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, "uploads/");
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-        cb(null, uniqueSuffix + path.extname(file.originalname));
+
+// const storage = multer.diskStorage({
+//     destination: function (req, file, cb) {
+//         cb(null, "uploads/");
+//     },
+//     filename: function (req, file, cb) {
+//         const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+//         cb(null, uniqueSuffix + path.extname(file.originalname));
+//     },
+// });
+
+// const upload = multer({ storage });
+
+
+// config
+cloudinary.config({
+    cloud_name: process.env.CLOUD_NAME,
+    api_key: process.env.API_KEY,
+    api_secret: process.env.API_SECRET,
+});
+
+// storage
+const storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+        folder: "courses", // optional folder name
+        allowed_formats: ["jpg", "png", "jpeg", "webp"],
     },
 });
 
 const upload = multer({ storage });
 
+
 // Create uploads folder if not exists
-const fs = require("fs");
-if (!fs.existsSync("uploads")) {
-    fs.mkdirSync("uploads");
-}
+// const fs = require("fs");
+// if (!fs.existsSync("uploads")) {
+//     fs.mkdirSync("uploads");
+// }
 
 // Serve images statically
-app.use("/uploads", express.static("uploads"));
+// app.use("/uploads", express.static("uploads"));
 
 // middleware VerifyFirebaseToken
 
@@ -62,7 +106,7 @@ app.use("/uploads", express.static("uploads"));
 
 
 
-// connection string 
+// connection string
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.BD_PASSWORD}@simple-crud-server.30cfyeq.mongodb.net/?appName=simple-crud-server`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -200,9 +244,14 @@ async function run() {
                 const updateData = req.body.data ? JSON.parse(req.body.data) : req.body;
 
                 // If a new photo is uploaded, set its URL
+                // if (req.file) {
+                //     updateData.photoURL = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+                // }
+
                 if (req.file) {
-                    updateData.photoURL = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+                    updateData.photoURL = req.file.path; // 🔥 Cloudinary URL
                 }
+
 
                 if (!ObjectId.isValid(id)) {
                     return res.status(400).send({ message: "Invalid user ID" });
@@ -299,7 +348,7 @@ async function run() {
 
                 // Image Upload
                 if (req.file) {
-                    categoryData.image = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+                    categoryData.image = req.file.path; // 🔥 Cloudinary URL
                 } else {
                     categoryData.image = "";
                 }
@@ -328,7 +377,7 @@ async function run() {
 
                 // 🔹 নতুন image দিলে
                 if (req.file) {
-                    updateData.image = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+                    updateData.image = req.file.path; // 🔥 Cloudinary URL
                 }
 
                 // 🔹 image remove করলে
@@ -356,7 +405,7 @@ async function run() {
             }
         });
 
-        // enrolled ment course api 
+        // enrolled ment course api
 
         app.post("/enroll", async (req, res) => {
             try {
@@ -536,9 +585,9 @@ async function run() {
                 // 🔥 update data
                 topics[moduleIndex].sub_topics[subIndex] = {
                     ...topics[moduleIndex].sub_topics[subIndex],
-                    title: data.title,
-                    type: data.type,
-                    link: data.link,
+                    title: data?.title,
+                    type: data?.type,
+                    link: data?.link,
                 };
 
                 // 🔥 save updated topics
@@ -589,7 +638,7 @@ async function run() {
 
 
 
-        // courses api 
+        // courses api
 
         app.get("/courses", async (req, res) => {
             try {
@@ -683,7 +732,7 @@ async function run() {
                 courseData.id = nextId.toString();
 
                 if (req.file) {
-                    courseData.thumbnail = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+                    courseData.thumbnail = req.file.path; // 🔥 Cloudinary URL
                 } else {
                     courseData.thumbnail = "";
                 }
@@ -709,7 +758,7 @@ async function run() {
 
                 // যদি নতুন image আসে
                 if (req.file) {
-                    updateData.thumbnail = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+                    updateData.thumbnail = req.file.path; // 🔥 Cloudinary URL
                 }
 
                 // 🔹 Custom id দিয়ে course খোঁজা
@@ -749,7 +798,9 @@ app.get('/', (req, res) => {
     res.send('Simple react projects setup is running!')
 })
 
-app.listen(port, () => {
-    console.log(`Example app listening on port ${port}`)
-})
+// app.listen(port, () => {
+//     console.log(`Example app listening on port ${port}`)
+// })
 
+module.exports = app;
+module.exports.handler = serverless(app);
