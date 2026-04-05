@@ -1,27 +1,8 @@
 {
-    "version": 2,
-    "builds": [
-        {
-            "src": "api/**/*.js",
-            "use": "@vercel/node"
-        }
-    ],
-    "routes": [
-        {
-            "src": "/users/(.*)",
-            "dest": "/api/index.js"
-        },
-        {
-            "src": "/courses/(.*)",
-            "dest": "/api/index.js"
-        },
-        {
-            "src": "/enroll/(.*)",
-            "dest": "/api/index.js"
-        },
-        {
-            "src": "/categories/(.*)",
-            "dest": "/api/index.js"
-        }
+    "rewrites": [
+        { "source": "/users", "destination": "/api/users" },
+        { "source": "/courses", "destination": "/api/courses" },
+        { "source": "/categories", "destination": "/api/categories" },
+        { "source": "/enroll", "destination": "/api/enroll" }
     ]
 }
