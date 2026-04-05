@@ -784,9 +784,9 @@ app.get('/', (req, res) => {
     res.send('Simple react projects setup is running!')
 })
 
-app.listen(port, () => {
-    console.log(`Example app listening on port ${port}`)
-})
+// app.listen(port, () => {
+//     console.log(`Example app listening on port ${port}`)
+// })
 
 module.exports = app;
 module.exports.handler = serverless(app);
