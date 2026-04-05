@@ -19,6 +19,8 @@ const { CloudinaryStorage } = require("multer-storage-cloudinary");
 // course er image er jonno multer sue kore
 
 const multer = require("multer");
+
+
 // const path = require("path");
 
 // Multer Storage Setup
@@ -37,6 +39,8 @@ const multer = require("multer");
 
 
 // config
+
+
 cloudinary.config({
     cloud_name: process.env.CLOUD_NAME,
     api_key: process.env.API_KEY,
@@ -91,6 +95,8 @@ const upload = multer({ storage });
 
 
 // connection string
+
+
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.BD_PASSWORD}@simple-crud-server.30cfyeq.mongodb.net/?appName=simple-crud-server`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -131,7 +137,6 @@ async function run() {
 
 
         // User Related api
-
 
 
 
