@@ -251,7 +251,7 @@ async function run() {
 
                 const updatedUser = await userCollection.findOne({ _id: new ObjectId(id) });
 
-                res.status(200).send({ message: "User updated successfully", user: updatedUser });
+                res.status(200).send({ message: "success", user: updatedUser });
 
             } catch (error) {
                 console.error(error);
