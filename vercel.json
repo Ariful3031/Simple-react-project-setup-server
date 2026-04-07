@@ -1,8 +1,15 @@
 {
-    "rewrites": [
-        { "source": "/users", "destination": "/api/users" },
-        { "source": "/courses", "destination": "/api/courses" },
-        { "source": "/categories", "destination": "/api/categories" },
-        { "source": "/enroll", "destination": "/api/enroll" }
-    ]
+  "version": 2,
+  "builds": [
+    {
+      "src": "index.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "index.js"
+    }
+  ]
 }
